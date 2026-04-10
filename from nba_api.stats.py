@@ -1,66 +1,60 @@
-from nba_api.stats.static import players
-from nba_api.stats.endpoints import playercareerstats
 import matplotlib.pyplot as plt
 import pandas as pd
-import time
 
-# 解決 matplotlib 中文顯示問題 (如果需要)
-plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] # Windows
-# plt.rcParams['font.sans-serif'] = ['Arial Unicode MS'] # Mac
-plt.rcParams['axes.unicode_minus'] = False # 解決負號顯示問題
+# 1. 準備數據 (2020-2026)
+data = {
+    'Season': ['20-21', '21-22', '22-23', '23-24', '24-25', '25-26'],
+    'PPG': [19.3, 21.3, 24.6, 25.9, 27.6, 28.9],
+    'RPG': [4.7, 4.8, 5.8, 5.4, 5.7, 5.0],
+    'APG': [2.9, 3.8, 4.4, 5.1, 4.5, 3.7],
+    'Win_Rate': [0.319, 0.561, 0.512, 0.683, 0.598, 0.588]
+}
+df = pd.DataFrame(data)
 
-def get_player_season_stats(player_name):
-    print(f"正在搜尋球員：{player_name}...")
-    
-    nba_players = players.find_players_by_full_name(player_name)
-    if not nba_players:
-        return None
-    
-    player_id = nba_players[0]['id']
-    time.sleep(1)
+# 2. 設定圖表與字體 (避免中文亂碼)
+plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] 
+plt.rcParams['axes.unicode_minus'] = False
 
-    # 1. 抓取生涯統計 (改回預設參數最保險)
-    career_stats = playercareerstats.PlayerCareerStats(player_id=player_id)
-    df = career_stats.get_data_frames()[0]
-    
-    # 2. 手動計算場均數據 (這是最準確的做法)
-    # 我們將 總得分(PTS) / 出賽場數(GP)
-    df['AVG_PTS'] = df['PTS'] / df['GP']
-    df['AVG_REB'] = df['REB'] / df['GP']
-    df['AVG_AST'] = df['AST'] / df['GP']
-    
-    # 3. 只取我們要的欄位
-    selected_stats = df[['SEASON_ID', 'AVG_PTS', 'AVG_REB', 'AVG_AST']]
-    
-    print("\n成功取得 Anthony Edwards 場均數據：")
-    print(selected_stats)
-    return selected_stats
+fig, ax1 = plt.subplots(figsize=(14, 7))
 
-def plot_stats(df, player_name):
-    if df is None: return
+# 3. 繪製左軸：得分、籃板、助攻
+# 得分用線，籃板與助攻用長條圖或不同線型區隔
+line1 = ax1.plot(df['Season'], df['PPG'], color='blue', marker='o', linewidth=3, label='場均得分 (PTS)')
+line2 = ax1.plot(df['Season'], df['RPG'], color='green', marker='s', linestyle='--', label='場均籃板 (REB)')
+line3 = ax1.plot(df['Season'], df['APG'], color='orange', marker='^', linestyle=':', label='場均助攻 (AST)')
 
-    plt.figure(figsize=(10, 6))
+ax1.set_xlabel('賽季 (Season)', fontsize=12)
+ax1.set_ylabel('球員數據數值', fontsize=12)
+ax1.tick_params(axis='y')
+ax1.grid(True, alpha=0.2)
 
-    # 繪製三條線
-    plt.plot(df['SEASON_ID'], df['AVG_PTS'], marker='o', color='blue', label='得分 (PTS)')
-    plt.plot(df['SEASON_ID'], df['AVG_REB'], marker='s', color='green', label='籃板 (REB)')
-    plt.plot(df['SEASON_ID'], df['AVG_AST'], marker='^', color='orange', label='助攻 (AST)')
+# 4. 繪製右軸：球隊勝率
+ax2 = ax1.twinx()
+line4 = ax2.plot(df['Season'], df['Win_Rate'], color='red', marker='D', linewidth=2, label='球隊勝率 (Win %)')
+ax2.set_ylabel('球隊勝率', color='red', fontsize=12)
+ax2.set_ylim(0, 1.0) # 勝率範圍固定 0~1
+ax2.tick_params(axis='y', labelcolor='red')
 
-    # 強制在每個點上顯示數值，這樣有沒有抓到資料一目了然
-    for i in range(len(df)):
-        plt.text(i, df['AVG_PTS'].iloc[i] + 0.5, f"{df['AVG_PTS'].iloc[i]:.1f}", ha='center', color='blue')
-        plt.text(i, df['AVG_REB'].iloc[i] + 0.5, f"{df['AVG_REB'].iloc[i]:.1f}", ha='center', color='green')
-        plt.text(i, df['AVG_AST'].iloc[i] + 0.5, f"{df['AVG_AST'].iloc[i]:.1f}", ha='center', color='orange')
+# 5. --- 核心需求：在圖表上顯示數值標籤 ---
+def add_labels(ax, x_data, y_data, color, offset=0.5, is_percent=False):
+    for x, y in zip(x_data, y_data):
+        label = f'{y:.1f}' if not is_percent else f'{y:.1%}'
+        ax.text(x, y + offset, label, ha='center', color=color, fontweight='bold', fontsize=10)
 
-    plt.title(f'{player_name} 生涯場均數據')
-    plt.legend()
-    plt.grid(True, alpha=0.2)
-    plt.show()
+# 為每一條線加上標籤
+add_labels(ax1, df['Season'], df['PPG'], 'blue', offset=0.8)   # 得分標籤
+add_labels(ax1, df['Season'], df['RPG'], 'green', offset=0.5)  # 籃板標籤
+add_labels(ax1, df['Season'], df['APG'], 'orange', offset=0.5) # 助攻標籤
+add_labels(ax2, df['Season'], df['Win_Rate'], 'red', offset=0.02, is_percent=True) # 勝率標籤
 
-# --- 主程式執行 ---
-if __name__ == "__main__":
-    player = "Anthony Edwards"
-    stats_df = get_player_season_stats(player)
-    
-    if stats_df is not None:
-        plot_stats(stats_df, player)
+# 6. 合併圖例
+all_lines = line1 + line2 + line3 + line4
+all_labels = [l.get_label() for l in all_lines]
+ax1.legend(all_lines, all_labels, loc='upper left', frameon=True, shadow=True)
+
+plt.title('Anthony Edwards 生涯各項數據與球隊勝率對照圖 (含數值標註)', fontsize=16)
+fig.tight_layout()
+
+# 儲存與顯示
+plt.savefig('AE_Full_Stats.png', dpi=300)
+plt.show()
